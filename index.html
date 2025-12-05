@@ -1,198 +1,118 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Fistik Drift</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FistikDrift</title>
+
+<!-- THREE.JS (GitHub Pages'ta %100 çalışan sürüm) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
 <style>
-  html,body{height:100%;margin:0;padding:0;overflow:hidden;background:#e8ffe6;font-family:Arial,Helvetica,sans-serif;}
-  /* Menu (keeps the style you liked) */
-  #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#e8ffe6;z-index:9999;}
-  #menuCard{width:520px;max-width:90%;background:rgba(255,255,255,0.05);padding:28px;border-radius:12px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.2);}
-  #menuCard h1{margin:4px 0 18px 0;font-size:44px;color:#062a06;letter-spacing:2px;}
-  #playBtn{padding:14px 34px;font-size:20px;background:#0bb34b;color:white;border:0;border-radius:8px;cursor:pointer;}
-  #playBtn:active{transform:translateY(1px);}
-  #rayToggle{display:none;position:fixed;top:12px;left:12px;z-index:9998;padding:8px 12px;background:rgba(0,0,0,0.45);color:white;border-radius:8px;cursor:pointer;}
-  canvas{position:absolute;left:0;top:0;width:100%;height:100%;}
-</style>
-</head>
-<body>
-
-<!-- MAIN MENU -->
-<div id="menu" role="dialog" aria-label="Main menu">
-  <div id="menuCard">
-    <h1>Fistik Drift</h1>
-    <p style="margin-top:-8px;color:#083b08">Open world drift prototype</p>
-    <button id="playBtn" aria-label="Play">Play</button>
-  </div>
-</div>
-
-<div id="rayToggle" role="button" tabindex="0">Ray Tracing: OFF</div>
-
-<!-- Three.js CDN (OK for GitHub Pages) -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
-
-<script>
-/*
-  Single-file GitHub Pages ready prototype.
-  - Appends renderer to DOM before removing the menu (no black flash).
-  - Play button is robust (click/touch/keyboard).
-  - Ray toggle toggles a visual exposure change.
-*/
-
-(function(){
-  // Defensive checks
-  if (typeof THREE === 'undefined') {
-    console.error('Three.js failed to load. Check CDN access.');
-  }
-
-  const menu = document.getElementById('menu');
-  const playBtn = document.getElementById('playBtn');
-  const rayToggle = document.getElementById('rayToggle');
-
-  // Make Play robust: click / touch / keyboard
-  function startGameHandler(e){
-    // prevent double-starts
-    if (window.__fistik_started) return;
-    window.__fistik_started = true;
-    console.log('FistikDrift: starting by', e && e.type ? e.type : 'unknown');
-    startGame();
-    // show ray toggle and remove menu
-    rayToggle.style.display = 'block';
-    try { menu.remove(); } catch(e){}
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    playBtn.addEventListener('click', startGameHandler);
-    playBtn.addEventListener('touchstart', function(ev){ ev.preventDefault(); startGameHandler(ev); }, {passive:false});
-    playBtn.addEventListener('keydown', function(ev){ if(ev.key==='Enter' || ev.key===' ') { ev.preventDefault(); startGameHandler(ev); }});
-    // global Enter fallback if menu still present
-    window.addEventListener('keydown', function(ev){ if((ev.key==='Enter' || ev.key===' ') && document.body.contains(menu)){ startGameHandler(ev); }});
-  });
-
-  rayToggle.addEventListener('click', function(){
-    const on = rayToggle.textContent.includes('ON');
-    rayToggle.textContent = 'Ray Tracing: ' + (on ? 'OFF' : 'ON');
-    applyRay(!on);
-  });
-
-  // Core variables
-  let renderer, scene, camera, car;
-  let velocity = 0, angularVel = 0;
-  let keys = {};
-
-  window.addEventListener('keydown', (e)=> keys[e.key.toLowerCase()] = true);
-  window.addEventListener('keyup', (e)=> keys[e.key.toLowerCase()] = false);
-
-  function startGame(){
-    // create renderer early and append to DOM (prevents black flash)
-    renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x9fe3a2); // soft green so page never looks black
-    // ensure canvas covers full embed area
-    renderer.domElement.style.position = 'absolute';
-    renderer.domElement.style.left = '0';
-    renderer.domElement.style.top = '0';
-    renderer.domElement.style.width = '100%';
-    renderer.domElement.style.height = '100%';
-    document.body.appendChild(renderer.domElement);
-
-    // scene & camera
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xaee9b8);
-
-    camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 2000);
-    camera.position.set(0,4.5,10);
-
-    // lights
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-    hemi.position.set(0,20,0);
-    scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir.position.set(10,20,10);
-    scene.add(dir);
-
-    // ground
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000,2000),
-      new THREE.MeshStandardMaterial({color:0x3b3b3b, roughness:0.9})
-    );
-    ground.rotation.x = -Math.PI/2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // small world props
-    const boxMat = new THREE.MeshStandardMaterial({color:0x6b6b6b});
-    for(let i=0;i<18;i++){
-      const h = THREE.MathUtils.randFloat(2,18);
-      const b = new THREE.Mesh(new THREE.BoxGeometry(6,h,6), boxMat);
-      b.position.set((Math.random()-0.5)*400, h/2, (Math.random()-0.5)*400);
-      scene.add(b);
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #ccffcc; /* Açık yeşil arka plan */
+        font-family: Arial, sans-serif;
     }
 
-    // car
-    car = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6,0.6,3.6),
-      new THREE.MeshStandardMaterial({color:0xff3333, metalness:0.2, roughness:0.4})
+    /* Ana Menü */
+    #menu {
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 10;
+    }
+
+    #menu h1 {
+        font-size: 50px;
+        margin-bottom: 20px;
+    }
+
+    #playBtn {
+        padding: 18px 50px;
+        font-size: 26px;
+        cursor: pointer;
+        border: none;
+        border-radius: 12px;
+        background: #28a745;
+        color: white;
+        transition: 0.2s;
+    }
+
+    #playBtn:hover {
+        background: #1e7e34;
+    }
+</style>
+</head>
+
+<body>
+
+<!-- ANA MENÜ -->
+<div id="menu">
+    <h1>FistikDrift</h1>
+    <button id="playBtn">PLAY</button>
+</div>
+
+<script>
+console.log("FistikDrift: page loaded");
+
+// THREE kontrolü
+if (typeof THREE === "undefined") {
+    console.error("Three.js failed to load!");
+}
+
+// ----------------- OYUN BAŞLANGICI ------------------
+function startGame() {
+    console.log("FistikDrift: starting by click");
+
+    document.getElementById("menu").style.display = "none";
+
+    // SAHNE
+    const scene = new THREE.Scene();
+
+    // KAMERA
+    const camera = new THREE.PerspectiveCamera(
+        75, window.innerWidth / window.innerHeight, 0.1, 1000
     );
-    car.position.y = 0.35;
-    scene.add(car);
+    camera.position.z = 5;
 
-    // resize handling
-    window.addEventListener('resize', onResize);
+    // RENDER
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    // start loop
+    // TEST KÜP (oyunun mevcut modeli — sonra istediğini ekleriz)
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshBasicMaterial({ color: 0x00aaff });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    // ANİMASYON
+    function animate() {
+        requestAnimationFrame(animate);
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+        renderer.render(scene, camera);
+    }
     animate();
-  }
 
-  function onResize(){
-    if(!renderer || !camera) return;
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    renderer.setSize(w,h);
-    camera.aspect = w/h;
-    camera.updateProjectionMatrix();
-  }
+    // Resize fix
+    window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+}
 
-  function applyRay(on){
-    if(!renderer) return;
-    renderer.toneMappingExposure = on ? 1.12 : 1.0;
-  }
-
-  function animate(){
-    requestAnimationFrame(animate);
-    if(!renderer || !scene || !camera || !car) return;
-
-    // simple input physics
-    const accel = (keys['w']?1:0) - (keys['s']?1:0);
-    const steer = (keys['a']?1:0) - (keys['d']?1:0);
-    const handbrake = !!keys[' '];
-
-    velocity += accel * 0.04;
-    velocity = THREE.MathUtils.clamp(velocity, -8, 28);
-    if(handbrake) velocity *= 0.986; else velocity *= 0.992;
-
-    if(handbrake) angularVel += steer * 0.06; else angularVel += steer * 0.02;
-    angularVel *= 0.95;
-
-    car.rotation.y += angularVel * 0.05;
-    car.position.x += Math.sin(car.rotation.y) * velocity * 0.12;
-    car.position.z += Math.cos(car.rotation.y) * velocity * 0.12;
-
-    // camera
-    const desired = new THREE.Vector3(
-      car.position.x - Math.sin(car.rotation.y)*8,
-      car.position.y + 4,
-      car.position.z - Math.cos(car.rotation.y)*8
-    );
-    camera.position.lerp(desired, 0.08);
-    camera.lookAt(car.position.x, car.position.y+0.6, car.position.z);
-
-    renderer.render(scene, camera);
-  }
-
-})(); // end IIFE
+// PLAY butonu
+document.getElementById("playBtn").addEventListener("click", startGame);
 </script>
+
 </body>
 </html>
