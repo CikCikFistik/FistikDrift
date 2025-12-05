@@ -5,18 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>FistikDrift</title>
 
-<!-- THREE.JS (GitHub Pages'ta %100 çalışan sürüm) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- Three.js (tamamen çalışan resmi CDN – GitHub Pages ile %100 uyumlu) -->
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <style>
     body {
         margin: 0;
         overflow: hidden;
-        background: #ccffcc; /* Açık yeşil arka plan */
+        background: #ccffcc;
         font-family: Arial, sans-serif;
     }
 
-    /* Ana Menü */
     #menu {
         position: absolute;
         inset: 0;
@@ -53,47 +52,42 @@
 
 <body>
 
-<!-- ANA MENÜ -->
 <div id="menu">
     <h1>FistikDrift</h1>
     <button id="playBtn">PLAY</button>
 </div>
 
 <script>
-console.log("FistikDrift: page loaded");
+console.log("FistikDrift loaded");
 
-// THREE kontrolü
-if (typeof THREE === "undefined") {
-    console.error("Three.js failed to load!");
-}
+document.getElementById("playBtn").addEventListener("click", startGame);
 
-// ----------------- OYUN BAŞLANGICI ------------------
 function startGame() {
-    console.log("FistikDrift: starting by click");
+    console.log("FistikDrift: starting game");
 
     document.getElementById("menu").style.display = "none";
 
-    // SAHNE
+    // Scene
     const scene = new THREE.Scene();
 
-    // KAMERA
+    // Camera
     const camera = new THREE.PerspectiveCamera(
         75, window.innerWidth / window.innerHeight, 0.1, 1000
     );
     camera.position.z = 5;
 
-    // RENDER
+    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // TEST KÜP (oyunun mevcut modeli — sonra istediğini ekleriz)
+    // Test cube (oyun modeli)
     const geometry = new THREE.BoxGeometry();
     const material = new THREE.MeshBasicMaterial({ color: 0x00aaff });
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
 
-    // ANİMASYON
+    // Animation
     function animate() {
         requestAnimationFrame(animate);
         cube.rotation.x += 0.01;
@@ -102,16 +96,13 @@ function startGame() {
     }
     animate();
 
-    // Resize fix
+    // Resize
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 }
-
-// PLAY butonu
-document.getElementById("playBtn").addEventListener("click", startGame);
 </script>
 
 </body>
