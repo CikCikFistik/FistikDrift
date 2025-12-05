@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FistikDrift</title>
 
-<!-- Three.js (tamamen çalışan resmi CDN – GitHub Pages ile %100 uyumlu) -->
+<!-- Three.js -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <style>
@@ -58,45 +58,133 @@
 </div>
 
 <script>
-console.log("FistikDrift loaded");
-
 document.getElementById("playBtn").addEventListener("click", startGame);
 
 function startGame() {
-    console.log("FistikDrift: starting game");
 
     document.getElementById("menu").style.display = "none";
 
-    // Scene
+    /* ---------------------------------------------------
+       SCENE
+    --------------------------------------------------- */
     const scene = new THREE.Scene();
 
-    // Camera
+    /* ---------------------------------------------------
+       CAMERA
+    --------------------------------------------------- */
     const camera = new THREE.PerspectiveCamera(
-        75, window.innerWidth / window.innerHeight, 0.1, 1000
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        2000
     );
-    camera.position.z = 5;
+    camera.position.set(0, 5, 10);
 
-    // Renderer
+    /* ---------------------------------------------------
+       RENDERER
+    --------------------------------------------------- */
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Test cube (oyun modeli)
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshBasicMaterial({ color: 0x00aaff });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+    /* ---------------------------------------------------
+       LIGHTS
+    --------------------------------------------------- */
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(10, 20, 10);
+    scene.add(light);
 
-    // Animation
+    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambient);
+
+    /* ---------------------------------------------------
+       GROUND (ROAD)
+    --------------------------------------------------- */
+    const groundGeo = new THREE.PlaneGeometry(500, 500);
+    const groundMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    /* ---------------------------------------------------
+       CAR (simple cube body)
+    --------------------------------------------------- */
+    const carGeo = new THREE.BoxGeometry(1, 0.5, 2);
+    const carMat = new THREE.MeshPhongMaterial({ color: 0xff6600 });
+    const car = new THREE.Mesh(carGeo, carMat);
+    car.position.y = 0.35;
+    scene.add(car);
+
+    /* ---------------------------------------------------
+       CAR MOVEMENT
+    --------------------------------------------------- */
+    const keys = {};
+    let speed = 0;
+    let maxSpeed = 0.2;
+    let accel = 0.01;
+    let friction = 0.96;
+    let turnSpeed = 0.04;
+
+    document.addEventListener("keydown", (e) => (keys[e.key] = true));
+    document.addEventListener("keyup", (e) => (keys[e.key] = false));
+
+    function updateCar() {
+
+        // Accelerate forward
+        if (keys["w"]) speed += accel;
+        // Reverse
+        if (keys["s"]) speed -= accel;
+
+        // Limit max speed
+        speed *= friction;
+        if (speed > maxSpeed) speed = maxSpeed;
+        if (speed < -maxSpeed) speed = -maxSpeed;
+
+        // Turning
+        if (keys["a"]) car.rotation.y += turnSpeed * (speed > 0 ? 1 : -1);
+        if (keys["d"]) car.rotation.y -= turnSpeed * (speed > 0 ? 1 : -1);
+
+        // Movement + drift slight slide
+        const drift = 0.05;
+        car.position.x += Math.sin(car.rotation.y) * speed;
+        car.position.z += Math.cos(car.rotation.y) * speed;
+
+        // Drift lateral slide
+        car.position.x += Math.sin(car.rotation.y + Math.PI / 2) * speed * drift;
+        car.position.z += Math.cos(car.rotation.y + Math.PI / 2) * speed * drift;
+    }
+
+    /* ---------------------------------------------------
+       CAMERA FOLLOW
+    --------------------------------------------------- */
+    function updateCamera() {
+        const camOffset = new THREE.Vector3(0, 4, 8);
+        const rotatedOffset = camOffset.clone().applyAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            car.rotation.y
+        );
+
+        camera.position.copy(car.position.clone().add(rotatedOffset));
+        camera.lookAt(car.position);
+    }
+
+    /* ---------------------------------------------------
+       ANIMATE
+    --------------------------------------------------- */
     function animate() {
         requestAnimationFrame(animate);
-        cube.rotation.x += 0.01;
-        cube.rotation.y += 0.01;
+
+        updateCar();
+        updateCamera();
+
         renderer.render(scene, camera);
     }
+
     animate();
 
-    // Resize
+    /* ---------------------------------------------------
+       WINDOW RESIZE FIX
+    --------------------------------------------------- */
     window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -104,6 +192,5 @@ function startGame() {
     });
 }
 </script>
-
 </body>
 </html>
