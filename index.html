@@ -1,196 +1,577 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FistikDrift</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Fistik Drift</title>
 
-<!-- Three.js -->
+<!-- THREE.JS (unpkg - GitHub Pages friendly) -->
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 
 <style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        background: #ccffcc;
-        font-family: Arial, sans-serif;
-    }
+  /* --- Keep the menu style you liked (light green theme) --- */
+  html,body{height:100%;margin:0;padding:0;background:#e8ffe6;font-family:Arial, Helvetica, sans-serif;overflow:hidden}
+  #menu {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    z-index:9999; background:#e8ffe6; /* very light green, same as earlier liked */
+  }
+  #menuCard {
+    width:560px; max-width:94%;
+    background: rgba(255,255,255,0.06);
+    padding:28px; border-radius:12px; text-align:center;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.25);
+  }
+  #menuCard h1 {
+    margin:0 0 12px 0; font-size:46px; color:#062a06; letter-spacing:2px;
+  }
+  #menuCard p.lead { margin:0 0 18px 0; color:#083b08; }
+  button.primary {
+    padding:14px 34px; font-size:18px; background:#0bb34b; color:#fff; border:0; border-radius:8px;
+    cursor:pointer;
+  }
+  button.secondary {
+    margin-left:10px; padding:10px 18px; font-size:14px; background:#2f2f2f; color:#fff; border:0; border-radius:8px; cursor:pointer;
+  }
 
-    #menu {
-        position: absolute;
-        inset: 0;
-        background: rgba(0,0,0,0.8);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        z-index: 10;
-    }
+  /* HUD */
+  #hud {
+    position: fixed; right: 12px; top: 12px; z-index: 9998;
+    color:#062a06; background: rgba(255,255,255,0.85); padding:8px 12px; border-radius:8px;
+    font-family: monospace; text-align:right;
+  }
+  #controls {
+    position: fixed; left: 12px; top:12px; z-index:9998;
+    color:#062a06; background: rgba(255,255,255,0.85); padding:8px 12px; border-radius:8px;
+    font-size:13px;
+  }
 
-    #menu h1 {
-        font-size: 50px;
-        margin-bottom: 20px;
-    }
+  /* Canvas should fill embed area */
+  canvas { position: absolute; left:0; top:0; width:100%; height:100%; display:block; }
 
-    #playBtn {
-        padding: 18px 50px;
-        font-size: 26px;
-        cursor: pointer;
-        border: none;
-        border-radius: 12px;
-        background: #28a745;
-        color: white;
-        transition: 0.2s;
-    }
-
-    #playBtn:hover {
-        background: #1e7e34;
-    }
+  /* Small info at bottom */
+  #footerNote {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 9998;
+    background: rgba(255,255,255,0.85); padding:6px 12px; border-radius:8px; color:#062a06; font-size:13px;
+  }
 </style>
 </head>
-
 <body>
 
-<div id="menu">
-    <h1>FistikDrift</h1>
-    <button id="playBtn">PLAY</button>
+<!-- Menu (kept style) -->
+<div id="menu" aria-hidden="false">
+  <div id="menuCard" role="dialog" aria-label="Main Menu">
+    <h1>Fistik Drift</h1>
+    <p class="lead">Open-world drift prototype — press Play to start</p>
+    <div style="margin-top:14px;">
+      <button id="playBtn" class="primary" aria-label="Play">Play</button>
+      <button id="demoBtn" class="secondary" aria-label="Spawn Car">Spawn Car</button>
+    </div>
+    <p style="margin-top:14px;color:#2b582b;font-size:13px">Controls: W = Forward, S = Backward, A/D = Steer, Space = Handbrake (drift), Shift = Boost</p>
+  </div>
+</div>
+
+<div id="hud" aria-hidden="true" style="display:none">
+  Speed: <span id="speedVal">0</span> km/h<br>
+  Drift: <span id="driftVal">0</span>
+</div>
+
+<div id="controls" aria-hidden="true" style="display:none">
+  W/A/S/D - Drive<br>
+  Space - Handbrake<br>
+  Shift - Boost
+</div>
+
+<div id="footerNote" aria-hidden="true" style="display:none">
+  Tip: Press Space while turning to increase drift.
 </div>
 
 <script>
-document.getElementById("playBtn").addEventListener("click", startGame);
+/* -------------- Fistik Drift — Single-file prototype --------------
+   Features:
+   - Procedural terrain (vertex displacement)
+   - Car visual (body + wheels) with simple physics & drift
+   - HUD, skidmark texture, camera follow
+   - Correct controls: W forward, S backward
+   - No raytracing
+   - Works on GitHub Pages / local (Three.js via unpkg)
+------------------------------------------------------------------*/
 
-function startGame() {
-
-    document.getElementById("menu").style.display = "none";
-
-    /* ---------------------------------------------------
-       SCENE
-    --------------------------------------------------- */
-    const scene = new THREE.Scene();
-
-    /* ---------------------------------------------------
-       CAMERA
-    --------------------------------------------------- */
-    const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        2000
-    );
-    camera.position.set(0, 5, 10);
-
-    /* ---------------------------------------------------
-       RENDERER
-    --------------------------------------------------- */
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    /* ---------------------------------------------------
-       LIGHTS
-    --------------------------------------------------- */
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(10, 20, 10);
-    scene.add(light);
-
-    const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambient);
-
-    /* ---------------------------------------------------
-       GROUND (ROAD)
-    --------------------------------------------------- */
-    const groundGeo = new THREE.PlaneGeometry(500, 500);
-    const groundMat = new THREE.MeshPhongMaterial({ color: 0x222222 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-
-    /* ---------------------------------------------------
-       CAR (simple cube body)
-    --------------------------------------------------- */
-    const carGeo = new THREE.BoxGeometry(1, 0.5, 2);
-    const carMat = new THREE.MeshPhongMaterial({ color: 0xff6600 });
-    const car = new THREE.Mesh(carGeo, carMat);
-    car.position.y = 0.35;
-    scene.add(car);
-
-    /* ---------------------------------------------------
-       CAR MOVEMENT
-    --------------------------------------------------- */
-    const keys = {};
-    let speed = 0;
-    let maxSpeed = 0.2;
-    let accel = 0.01;
-    let friction = 0.96;
-    let turnSpeed = 0.04;
-
-    document.addEventListener("keydown", (e) => (keys[e.key] = true));
-    document.addEventListener("keyup", (e) => (keys[e.key] = false));
-
-    function updateCar() {
-
-        // Accelerate forward
-        if (keys["w"]) speed += accel;
-        // Reverse
-        if (keys["s"]) speed -= accel;
-
-        // Limit max speed
-        speed *= friction;
-        if (speed > maxSpeed) speed = maxSpeed;
-        if (speed < -maxSpeed) speed = -maxSpeed;
-
-        // Turning
-        if (keys["a"]) car.rotation.y += turnSpeed * (speed > 0 ? 1 : -1);
-        if (keys["d"]) car.rotation.y -= turnSpeed * (speed > 0 ? 1 : -1);
-
-        // Movement + drift slight slide
-        const drift = 0.05;
-        car.position.x += Math.sin(car.rotation.y) * speed;
-        car.position.z += Math.cos(car.rotation.y) * speed;
-
-        // Drift lateral slide
-        car.position.x += Math.sin(car.rotation.y + Math.PI / 2) * speed * drift;
-        car.position.z += Math.cos(car.rotation.y + Math.PI / 2) * speed * drift;
-    }
-
-    /* ---------------------------------------------------
-       CAMERA FOLLOW
-    --------------------------------------------------- */
-    function updateCamera() {
-        const camOffset = new THREE.Vector3(0, 4, 8);
-        const rotatedOffset = camOffset.clone().applyAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            car.rotation.y
-        );
-
-        camera.position.copy(car.position.clone().add(rotatedOffset));
-        camera.lookAt(car.position);
-    }
-
-    /* ---------------------------------------------------
-       ANIMATE
-    --------------------------------------------------- */
-    function animate() {
-        requestAnimationFrame(animate);
-
-        updateCar();
-        updateCamera();
-
-        renderer.render(scene, camera);
-    }
-
-    animate();
-
-    /* ---------------------------------------------------
-       WINDOW RESIZE FIX
-    --------------------------------------------------- */
-    window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+/* Quick safety: ensure THREE is loaded */
+if (typeof THREE === 'undefined') {
+  console.error('Three.js failed to load. Check CDN access.');
+  alert('Three.js failed to load. Check your internet / CDN. If you host offline, use a local three.min.js.');
 }
+
+/* Globals */
+let renderer, scene, camera, clock;
+let car, wheels = [], ground, skidCanvas, skidTexture, skidContext;
+let keys = {};
+let started = false;
+let hud = document.getElementById('hud');
+let speedVal = document.getElementById('speedVal');
+let driftVal = document.getElementById('driftVal');
+let controlsUI = document.getElementById('controls');
+let footerNote = document.getElementById('footerNote');
+
+/* Car physics params */
+const CAR = {
+  mass: 1200,
+  maxSpeed: 55,        // km/h equivalent units mapped later
+  accel: 8.0,          // tuned acceleration
+  brake: 12.0,
+  turning: 2.6,        // degrees per frame scaled
+  grip: 1.0,           // base grip (1.0 normal, <1 more slide)
+  handbrakeGrip: 0.2,  // grip when handbrake pressed
+  drag: 0.985
+};
+
+/* Convert internal speed to km/h for HUD */
+function speedToKmh(v) {
+  // v is our internal "units per frame" — scale to believable km/h approximation
+  return Math.round(v * 18); // tuned scalar (empirical)
+}
+
+/* --- Utility: Simple pseudo-noise for terrain (no external libs) --- */
+function simpleNoise2(x, y) {
+  // a simple hash-based pseudo-noise (not Perlin but ok for terrain)
+  const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+  return s - Math.floor(s);
+}
+function smoothNoise2(x, y) {
+  // bilinear-ish smooth
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  function n(ix, iy){ return simpleNoise2(ix, iy); }
+  const a = n(xi, yi);
+  const b = n(xi+1, yi);
+  const c = n(xi, yi+1);
+  const d = n(xi+1, yi+1);
+  const ab = a*(1-xf)+b*xf;
+  const cd = c*(1-xf)+d*xf;
+  return ab*(1-yf)+cd*yf;
+}
+function fractalNoise(x,y,octaves=4, lacunarity=2, gain=0.5) {
+  let amp = 1, freq = 0.02, sum = 0;
+  for(let i=0;i<octaves;i++){
+    sum += smoothNoise2(x*freq, y*freq) * amp;
+    amp *= gain;
+    freq *= lacunarity;
+  }
+  return sum;
+}
+
+/* --- Menu / Play handling (robust) --- */
+const playBtn = document.getElementById('playBtn');
+const demoBtn = document.getElementById('demoBtn');
+
+function startGameHandler(e){
+  if (started) return;
+  started = true;
+  console.log('FistikDrift: starting by', e && e.type ? e.type : 'unknown');
+  document.getElementById('menu').style.display = 'none';
+  hud.style.display = 'block';
+  controlsUI.style.display = 'block';
+  footerNote.style.display = 'block';
+  init();
+}
+
+playBtn.addEventListener('click', startGameHandler);
+playBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); startGameHandler(e); }, {passive:false});
+window.addEventListener('keydown', (e)=>{ if((e.key==='Enter' || e.key===' ') && !started){ startGameHandler(e); }});
+
+demoBtn.addEventListener('click', ()=>{
+  // quick spawn car in menu for demo without closing menu
+  if (!car) {
+    // create a temporary preview
+    initPreview();
+  } else {
+    resetCar();
+  }
+});
+
+/* --- Init scene, renderer, camera --- */
+function init(){
+  clock = new THREE.Clock();
+
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // append canvas first so no black flash
+  document.body.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  // sky-like ambient
+  scene.background = new THREE.Color(0xBFEAD5);
+
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+  camera.position.set(0, 6, -12);
+
+  // lighting
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+  hemi.position.set(0, 200, 0);
+  scene.add(hemi);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+  sun.position.set(50, 100, -50);
+  sun.castShadow = true;
+  sun.shadow.camera.left = -200; sun.shadow.camera.right = 200;
+  sun.shadow.camera.top = 200; sun.shadow.camera.bottom = -200;
+  sun.shadow.mapSize.set(2048, 2048);
+  scene.add(sun);
+
+  // fog for depth
+  scene.fog = new THREE.FogExp2(0xBFEAD5, 0.0005);
+
+  // create procedural terrain
+  createTerrain();
+
+  // create skidmark canvas & texture (used by ground)
+  createSkidCanvas();
+
+  // create car (visual + physics state)
+  createCar();
+
+  // add some props (boxes/rocks)
+  createProps();
+
+  // event listeners
+  window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', (e)=> keys[e.key.toLowerCase()] = true);
+  window.addEventListener('keyup', (e)=> keys[e.key.toLowerCase()] = false);
+
+  // start animation
+  animate();
+}
+
+/* --- Terrain creation (plane displacement) --- */
+function createTerrain(){
+  const size = 1200;
+  const segments = 200; // increase for smoother terrain (costly)
+  const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+  geo.rotateX(-Math.PI/2);
+
+  // displace vertices with fractal noise
+  for (let i=0, l=geo.attributes.position.count; i<l; i++){
+    const vx = geo.attributes.position.getX(i);
+    const vz = geo.attributes.position.getZ(i);
+    // use combined sin + fractal noise for interesting hills
+    let h = Math.sin(vx*0.01)*12 + Math.cos(vz*0.012)*10;
+    h += (fractalNoise(vx*0.3, vz*0.3, 5, 2.0, 0.45)-0.5)*60;
+    h *= 0.8; // scale down
+    geo.attributes.position.setY(i, h);
+  }
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x3d5a3d,
+    roughness: 1.0,
+    metalness: 0.0,
+    envMapIntensity:0.2,
+    side: THREE.DoubleSide
+  });
+
+  // We'll bake skid texture onto a second material layer via onBeforeCompile? Simpler: use a THREE.Mesh with a custom map
+  ground = new THREE.Mesh(geo, mat);
+  ground.receiveShadow = true;
+  ground.position.y = -4;
+  scene.add(ground);
+}
+
+/* --- Skid canvas to draw tire marks dynamically (projected onto ground via Decal-style UV trick) --- */
+function createSkidCanvas(){
+  const canvas = document.createElement('canvas');
+  canvas.width = 2048; canvas.height = 2048;
+  skidCanvas = canvas;
+  skidContext = canvas.getContext('2d');
+  // fill transparent greenish base (blended)
+  skidContext.fillStyle = 'rgba(0,0,0,0)';
+  skidContext.fillRect(0,0,canvas.width,canvas.height);
+
+  skidTexture = new THREE.CanvasTexture(canvas);
+  skidTexture.wrapS = skidTexture.wrapT = THREE.ClampToEdgeWrapping;
+  skidTexture.needsUpdate = true;
+
+  // Create a transparent overlay plane slightly above ground to show skidmarks
+  const planeGeo = new THREE.PlaneGeometry(1200, 1200, 1,1);
+  const planeMat = new THREE.MeshBasicMaterial({ map: skidTexture, transparent:true, depthWrite:false, opacity:1.0 });
+  const skidPlane = new THREE.Mesh(planeGeo, planeMat);
+  skidPlane.rotation.x = -Math.PI/2;
+  skidPlane.position.y = -3.98; // a bit above the displaced ground baseline
+  skidPlane.renderOrder = 2;
+  scene.add(skidPlane);
+}
+
+/* convert world position to skidCanvas UV and draw */
+function drawSkid(x,z,alpha, width){
+  // world coords centered on plane (plane size 1200 x 1200)
+  const uvx = (x / 1200 + 0.5) * skidCanvas.width;
+  const uvy = (1 - (z / 1200 + 0.5)) * skidCanvas.height;
+  skidContext.save();
+  skidContext.globalAlpha = alpha;
+  skidContext.fillStyle = 'rgba(12,12,12,0.9)';
+  skidContext.beginPath();
+  skidContext.ellipse(uvx, uvy, width, width*0.5, 0, 0, Math.PI*2);
+  skidContext.fill();
+  skidContext.restore();
+  skidTexture.needsUpdate = true;
+}
+
+/* --- Car creation (visual + state) --- */
+function createCar(){
+  // Car object holds physics state separate from mesh
+  const chassisGeo = new THREE.BoxGeometry(1.8, 0.6, 3.6);
+  const chassisMat = new THREE.MeshStandardMaterial({ color: 0xff6f00, metalness:0.2, roughness:0.4 });
+  car = new THREE.Mesh(chassisGeo, chassisMat);
+  car.castShadow = true;
+  car.receiveShadow = false;
+  car.position.set(0, 2, 0); // spawn above terrain
+  scene.add(car);
+
+  // Wheels visuals (no physical suspension, just visuals)
+  const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.45, 16);
+  const wheelMat = new THREE.MeshStandardMaterial({ color:0x111111, metalness:0.1, roughness:0.6 });
+  for (let i=0;i<4;i++){
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI/2;
+    w.castShadow = true;
+    scene.add(w);
+    wheels.push(w);
+  }
+
+  // Physics state
+  car.userData.physics = {
+    velocity: new THREE.Vector3(0,0,0),
+    forward: new THREE.Vector3(0,0,1),
+    speed: 0, // magnitude
+    yaw: 0,   // rotation around y
+    angularVelocity: 0,
+    grip: CAR.grip
+  };
+
+  // place car on ground height at spawn:
+  let h = getHeightAt(car.position.x, car.position.z);
+  car.position.y = h + 0.5;
+}
+
+/* --- Helper: sample ground height (simple nearest vertex sample) --- */
+function getHeightAt(x, z){
+  // ground geometry is plane with rotation X -PI/2; positions in attribute
+  if (!ground || !ground.geometry) return 0;
+  const pos = ground.geometry.attributes.position;
+  // map world x,z to uv grid in [-size/2, size/2]
+  const size = 1200;
+  const nx = (x + size/2) / size; // 0..1
+  const nz = (z + size/2) / size; // 0..1
+  // clamp
+  const gx = Math.floor(nx * 200);
+  const gz = Math.floor(nz * 200);
+  const seg = 200;
+  const ix = Math.max(0, Math.min(seg, gx));
+  const iz = Math.max(0, Math.min(seg, gz));
+  const vertIndex = iz * (seg + 1) + ix;
+  const y = pos.getY(vertIndex);
+  // ground was positioned at y = -4 earlier
+  return y - 4; // since we offset ground earlier
+}
+
+/* --- Props --- */
+function createProps(){
+  const boxMat = new THREE.MeshStandardMaterial({ color:0x6b6b6b });
+  for (let i=0;i<40;i++){
+    const h = THREE.MathUtils.randFloat(2, 20);
+    const b = new THREE.Mesh(new THREE.BoxGeometry(6, h, 6), boxMat);
+    b.castShadow = true;
+    b.receiveShadow = true;
+    b.position.set((Math.random()-0.5)*800, h/2 - 4, (Math.random()-0.5)*800);
+    scene.add(b);
+  }
+}
+
+/* --- Reset car to start position --- */
+function resetCar(){
+  car.position.set(0, getHeightAt(0,0) + 0.5, 0);
+  car.rotation.set(0,0,0);
+  car.userData.physics.velocity.set(0,0,0);
+  car.userData.physics.angularVelocity = 0;
+}
+
+/* --- Preview for demo button (spawn car while menu open) --- */
+let previewObj = null;
+function initPreview(){
+  // spawn a temporary car slightly above center for demo
+  if (!previewObj){
+    const pg = new THREE.BoxGeometry(1.6,0.6,3.2);
+    const pm = new THREE.MeshPhongMaterial({ color:0xff6600 });
+    previewObj = new THREE.Mesh(pg, pm);
+    previewObj.position.set(0, 2.5, 0);
+    scene ? scene.add(previewObj) : (function(){
+      // create a very light scene to show preview if scene not initialized
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 4000);
+      camera.position.set(0, 6, -10);
+      scene.add(previewObj);
+      animatePreview();
+    })();
+  }
+}
+
+function animatePreview(){
+  if (!previewObj) return;
+  previewObj.rotation.y += 0.01;
+  if (renderer && scene && camera) renderer.render(scene, camera);
+  requestAnimationFrame(animatePreview);
+}
+
+/* --- Core update: car physics + controls + skid drawing --- */
+let lastSkidPos = null;
+function updateCarPhysics(delta){
+  if (!car) return;
+
+  const p = car.userData.physics;
+  // Read controls (ensure W forward)
+  const forwardInput = (keys['w'] ? 1 : 0) - (keys['s'] ? 1 : 0); // W -> +1 forward
+  const steerInput = (keys['a'] ? 1 : 0) - (keys['d'] ? 1 : 0);   // A left -> +1
+
+  const handbrake = !!keys[' ']; // space
+  const boost = !!keys['shift'];
+
+  // Convert forwardInput to acceleration force
+  const accelForce = forwardInput * CAR.accel * (boost ? 2.0 : 1.0);
+  // Update velocity along local forward axis
+  const forwardVec = new THREE.Vector3(Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y));
+  // apply accel
+  p.velocity.add(forwardVec.multiplyScalar(accelForce * delta * 30)); // delta scale
+
+  // apply drag
+  p.velocity.multiplyScalar(Math.pow(CAR.drag, delta*60));
+
+  // limit speed
+  let speed = p.velocity.length();
+  const max = CAR.maxSpeed / 18; // scaled down
+  if (speed > max) {
+    p.velocity.setLength(max);
+    speed = max;
+  }
+
+  // steering: more effective at higher speeds; turning adjusts angular velocity
+  const steerEffect = steerInput * (CAR.turning * 0.001) * (0.8 + Math.min(speed / 0.5, 2.5));
+  p.angularVelocity += steerEffect * (speed >= 0 ? 1 : -1);
+
+  // apply angular damping
+  p.angularVelocity *= 0.92;
+
+  // when handbrake, reduce grip - allow sliding
+  const gripFactor = handbrake ? CAR.handbrakeGrip : CAR.grip;
+
+  // Lateral velocity removal to simulate grip (higher grip -> less sideways motion)
+  // compute local velocity in car-local coordinates
+  const localVel = worldToLocalVector(p.velocity.clone(), car.rotation.y);
+  // reduce lateral component proportionally to grip
+  localVel.x *= gripFactor;
+  // reconstruct world velocity
+  p.velocity.copy(localToWorldVector(localVel, car.rotation.y));
+
+  // update car rotation (yaw) by angular velocity
+  car.rotation.y += p.angularVelocity;
+
+  // update car position by velocity
+  car.position.add(p.velocity.clone().multiplyScalar(delta * 60));
+
+  // update wheels positions for visuals
+  updateWheels();
+
+  // draw skid marks if handbrake and lateral velocity high
+  const lateralSpeed = Math.abs(localVel.x);
+  if (handbrake && lateralSpeed > 0.08) {
+    // draw skid at car rear
+    const rearOffset = new THREE.Vector3(0,0, -1.2).applyAxisAngle(new THREE.Vector3(0,1,0), car.rotation.y).add(car.position);
+    drawSkid(rearOffset.x, rearOffset.z, Math.min(0.8, lateralSpeed*2), 8 + lateralSpeed*30);
+  }
+
+  // update HUD
+  speedVal.textContent = speedToKmh(speed);
+  driftVal.textContent = Math.round(localVel.x * 100);
+}
+
+/* convert world Vector to local car coords (x lateral, z forward) */
+function worldToLocalVector(vec, yaw){
+  const c = Math.cos(-yaw), s = Math.sin(-yaw);
+  const x = vec.x * c - vec.z * s;
+  const z = vec.x * s + vec.z * c;
+  return new THREE.Vector3(x, 0, z);
+}
+function localToWorldVector(vec, yaw){
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const x = vec.x * c - vec.z * s;
+  const z = vec.x * s + vec.z * c;
+  return new THREE.Vector3(x, 0, z);
+}
+
+/* --- Wheels visuals update --- */
+function updateWheels(){
+  if (wheels.length !==4 || !car) return;
+  // wheel offsets relative to car center
+  const offsets = [
+    new THREE.Vector3(-0.9, -0.25,  1.3), // front-left
+    new THREE.Vector3( 0.9, -0.25,  1.3), // front-right
+    new THREE.Vector3(-0.9, -0.25, -1.3), // rear-left
+    new THREE.Vector3( 0.9, -0.25, -1.3)  // rear-right
+  ];
+  for (let i=0;i<4;i++){
+    const off = offsets[i].clone().applyAxisAngle(new THREE.Vector3(0,1,0), car.rotation.y).add(car.position);
+    wheels[i].position.copy(off);
+    wheels[i].rotation.copy(car.rotation);
+  }
+}
+
+/* --- Animation loop --- */
+function animate(){
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  updateCarPhysics(delta);
+  updateCamera();
+
+  renderer.render(scene, camera);
+}
+
+/* --- Camera follow with damped motion --- */
+function updateCamera(){
+  if (!car || !camera) return;
+  const desired = car.position.clone().add(new THREE.Vector3(0, 4.2, -8).applyAxisAngle(new THREE.Vector3(0,1,0), car.rotation.y));
+  camera.position.lerp(desired, 0.08);
+  camera.lookAt(car.position.x, car.position.y + 0.8, car.position.z);
+}
+
+/* --- Window resize handler --- */
+function onResize(){
+  if (!renderer || !camera) return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* --- Utility: spawn initial car exactly on terrain surface --- */
+function placeCarOnTerrain(x,z){
+  const y = getHeightAt(x,z) + 0.5;
+  car.position.set(x,y,z);
+}
+
+/* --- End of main logic --- */
+
+/* ------------------------------------------------------------------
+   Below: ensure quick instructions for deployment and cache-bypass
+   - When updating on GitHub Pages, append ?v=NUMBER to force refresh
+------------------------------------------------------------------ */
+console.log('FistikDrift script loaded. Menu visible.');
+
+/* EOF */
 </script>
 </body>
 </html>
